@@ -247,11 +247,11 @@ class HanziDecomposer:
 
     def get_characters_with_component(self, component):
         if component in self.radicals.keys():
-            components = self.find_same_meaning_radicals(component)
+            #components = self.find_same_meaning_radicals(component)
             characters = []
-
+            components = [component]
             for component in components:
-                if self.characters_with_component[component]:
+                if self.characters_with_component.get(component, None):
                     characters.extend(self.characters_with_component[component])
 
             return characters
