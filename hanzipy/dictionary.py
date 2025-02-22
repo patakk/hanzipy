@@ -2,6 +2,11 @@ import logging
 import re
 from math import sqrt
 from pathlib import Path
+import string
+import tqdm
+import json
+import sys
+import os
 
 from hanzipy.decomposer import HanziDecomposer
 from hanzipy.exceptions import NotAHanziCharacter
@@ -35,20 +40,34 @@ class PinyinSyllable:
         return rhyme
 
 
+# TODO
+# IMPLEMENT SORTING BY FREQUENCY
+
 class HanziDictionary:
-    def __init__(self):
+    def __init__(self, use_cache=True):
+        self.use_cache = use_cache
+        self.cache_file = ".indices_cache.json"
         self.dictionary_simplified = {}
         self.dictionary_traditional = {}
+
+        self.english_index = {}
+        self.pinyin_index_toned = {}
+        self.pinyin_index_toneless = {}
+
         self.irregular_phonetics = {}
         self.char_freq = {}
         self.character_frequency_count_index = []
         self.word_freq = {}
         self.last_search_query = ""
-        self.compute_dictionary()
 
-    def compute_dictionary(self):
-        logging.debug("Compiling hanzi characters dictionary...")
+        if self.use_cache and self.load_indices_cache():
+            logging.debug("Successfully loaded indices from cache")
+            self.compute_dictionary(skip_indices=True)
+        else:
+            logging.debug("Indices not found in cache, computing dictionary...")
+            self.compute_dictionary(skip_indices=False)
 
+    def compute_dictionary(self, skip_indices=False):
         ccedict_filepath = "{}/data/cedict_ts.u8".format(CURRENT_DIR)
 
         with open(ccedict_filepath, encoding="utf-8") as ccedict_file:
@@ -127,12 +146,169 @@ class HanziDictionary:
                     self.dictionary_traditional[
                         hanzi_dict[0]["traditional"]
                     ] = hanzi_dict
+        if not skip_indices:
+            self.create_english_index()
+            self.create_pinyin_index()
+            self.save_indices_cache()
+        self.log_indices_stats()
+
+    def log_indices_stats(self):
+        """Log statistics about all indices"""
+        logging.debug("=== Indices Statistics ===")
+        
+        # English index stats
+        eng_size = sys.getsizeof(self.english_index) / (1024 * 1024)
+        logging.debug(f"English index:")
+        logging.debug(f"- Size: {eng_size:.2f} MB")
+        logging.debug(f"- Words indexed: {len(self.english_index)}")
+        logging.debug(f"- Sample words: {list(self.english_index.keys())[:5]}")
+        
+        # Pinyin index stats
+        toned_size = sys.getsizeof(self.pinyin_index_toned) / (1024 * 1024)
+        toneless_size = sys.getsizeof(self.pinyin_index_toneless) / (1024 * 1024)
+        logging.debug(f"Pinyin indices:")
+        logging.debug(f"- Toned size: {toned_size:.2f} MB")
+        logging.debug(f"- Toneless size: {toneless_size:.2f} MB")
+        logging.debug(f"- Toned entries: {len(self.pinyin_index_toned)}")
+        logging.debug(f"- Toneless entries: {len(self.pinyin_index_toneless)}")
+
+    def sort_hanzi_list_by_freq(self, hanzi_list):
+        return sorted(hanzi_list, key=lambda x: self.get_character_frequency(x)["number"], reverse=False)
+
+    def create_english_index(self):
+        logging.debug("Creating English word index...")
+        
+        self.english_index = {}
+        
+        def clean_word(word):
+            word = word.lower()
+            return word.strip(string.punctuation)
+        
+        for hanzi, entries in tqdm.tqdm(self.dictionary_simplified.items()):
+            for entry in entries:
+                words = entry['definition'].lower().replace('/', ' ').replace('\'s', ' ').split()
+                words = [clean_word(word) for word in words if clean_word(word)]
+                for word in words:
+                    if word not in self.english_index:
+                        self.english_index[word] = []
+                    if hanzi not in self.english_index[word]:
+                        self.english_index[word].append(hanzi)
+        for word in self.english_index:
+            self.english_index[word] = self.sort_hanzi_list_by_freq(self.english_index[word])
+
+    def create_pinyin_index(self):
+        logging.debug("Creating pinyin indices...")
+        self.pinyin_index_toned = {}    # With tone numbers
+        self.pinyin_index_toneless = {} # Without tones
+        
+        def clean_pinyin(pinyin, keep_tones=True):
+            # Lowercase everything except first letter of proper nouns
+            words = pinyin.split(' ')
+            cleaned = []
+            for word in words:
+                # if word[0].isupper():  # Proper noun
+                #     word = word[0] + word[1:].lower()
+                # else:
+                #     word = word.lower()
+                word = word.lower()
+                cleaned.append(word)
+            result = ' '.join(cleaned)
+            
+            if not keep_tones:
+                result = ''.join(c for c in result if not c.isdigit())
+            return result.strip()
+        
+        for hanzi, entries in tqdm.tqdm(self.dictionary_simplified.items()):
+            for entry in entries:
+                pinyin = entry['pinyin']
+                
+                # Create toned version
+                toned = clean_pinyin(pinyin, keep_tones=True)
+                if toned not in self.pinyin_index_toned:
+                    self.pinyin_index_toned[toned] = []
+                if hanzi not in self.pinyin_index_toned[toned]:
+                    self.pinyin_index_toned[toned].append(hanzi)
+                
+                # Create toneless version
+                toneless = clean_pinyin(pinyin, keep_tones=False)
+                if toneless not in self.pinyin_index_toneless:
+                    self.pinyin_index_toneless[toneless] = []
+                if hanzi not in self.pinyin_index_toneless[toneless]:
+                    self.pinyin_index_toneless[toneless].append(hanzi)
+        for word in self.pinyin_index_toned:
+            self.pinyin_index_toned[word] = self.sort_hanzi_list_by_freq(self.pinyin_index_toned[word])
+        for word in self.pinyin_index_toneless:
+            self.pinyin_index_toneless[word] = self.sort_hanzi_list_by_freq(self.pinyin_index_toneless[word])
+
+    def search_by_pinyin(self, pinyin):
+        """
+        Search for hanzi characters by pinyin
+        Args:
+            pinyin (str): Pinyin to search for (with or without tones)
+        Returns:
+            dict: Results and search information
+        """
+        has_tones = any(c.isdigit() for c in pinyin)
+        
+        # Clean input similar to how we cleaned during indexing
+        cleaned_pinyin = pinyin.strip().lower()
+        if has_tones:
+            results = self.pinyin_index_toned.get(cleaned_pinyin, [])
+        else:
+            results = self.pinyin_index_toneless.get(cleaned_pinyin, [])
+        return results
+   
+    def search_by_english(self, word):
+        """
+        Search for hanzi characters by English word
+        Returns list of hanzi characters that contain this English word in their definition
+        """
+        word = word.lower().replace('\'s', ' ').strip(string.punctuation).strip()
+        if word in self.english_index:
+            return self.english_index[word]
+        words = word.split(" ")
+        if len(words) == 1:
+            return []
+        results = []
+        for word in words:
+            if word in self.english_index:
+                results += self.english_index[word]
+        return results
+
+    def save_indices_cache(self):
+        """Save all indices to cache file"""
+        cache_data = {
+            'english_index': self.english_index,
+            'pinyin_index_toned': self.pinyin_index_toned,
+            'pinyin_index_toneless': self.pinyin_index_toneless
+        }
+        try:
+            logging.debug("Saving indices to cache...")
+            with open(self.cache_file, 'w', encoding='utf-8') as f:
+                json.dump(cache_data, f, ensure_ascii=False)
+            logging.debug("Cache saved successfully")
+        except Exception as e:
+            logging.warning(f"Failed to save cache: {e}")
+
+    def load_indices_cache(self):
+        """Load all indices from cache file"""
+        try:
+            if os.path.exists(self.cache_file):
+                logging.debug("Loading indices from cache...")
+                with open(self.cache_file, 'r', encoding='utf-8') as f:
+                    cache_data = json.load(f)
+                    self.english_index = cache_data['english_index']
+                    self.pinyin_index_toned = cache_data['pinyin_index_toned']
+                    self.pinyin_index_toneless = cache_data['pinyin_index_toneless']
+                logging.debug("Cache loaded successfully")
+                return True
+            return False
+        except Exception as e:
+            logging.warning(f"Failed to load cache: {e}")
+            return False
 
     def definition_lookup(self, word, script_type=None):
         # Not Hanzi
-        if not re.search("[\u4e00-\u9fff]", word):
-            raise NotAHanziCharacter(word)
-
         try:
             if not script_type:
                 if self.determine_if_simplfied_char(word):
@@ -463,10 +639,28 @@ class HanziDictionary:
 
         return regularities
 
-    def get_character_frequency(self, character):
+    def get_character_frequency(self, word):
+        lowest_num = 100000
+        highest_num = 0
+        highest_res = {"number": lowest_num}
+        for c in word:
+            try:
+                fr = self.get_character_frequency_(c)
+            except:
+                continue
+            #if fr["number"] < lowest_num:
+            #    lowest_num = fr["number"]
+            #    highest_res = fr
+            if fr["number"] > highest_num:
+                highest_num = fr["number"]
+                highest_res = fr
+        return highest_res
+
+
+    def get_character_frequency_(self, character):
         # Not Hanzi
-        if not re.search("[\u4e00-\u9fff]", character):
-            raise NotAHanziCharacter(character)
+        #if not re.search("[\u4e00-\u9fff]", character):
+        #    raise NotAHanziCharacter(character)
 
         dict_entry = self.definition_lookup(character)
 
