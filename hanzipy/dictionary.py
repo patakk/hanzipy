@@ -3,7 +3,6 @@ import re
 from math import sqrt
 from pathlib import Path
 import string
-import tqdm
 import json
 import sys
 import os
@@ -184,7 +183,7 @@ class HanziDictionary:
             word = word.lower()
             return word.strip(string.punctuation)
         
-        for hanzi, entries in tqdm.tqdm(self.dictionary_simplified.items()):
+        for hanzi, entries in self.dictionary_simplified.items():
             for entry in entries:
                 words = entry['definition'].lower().replace('/', ' ').replace('\'s', ' ').split()
                 words = [clean_word(word) for word in words if clean_word(word)]
@@ -218,7 +217,7 @@ class HanziDictionary:
                 result = ''.join(c for c in result if not c.isdigit())
             return result.strip()
         
-        for hanzi, entries in tqdm.tqdm(self.dictionary_simplified.items()):
+        for hanzi, entries in self.dictionary_simplified.items():
             for entry in entries:
                 pinyin = entry['pinyin']
                 
