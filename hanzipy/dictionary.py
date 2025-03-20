@@ -6,7 +6,9 @@ import string
 import json
 import sys
 import os
+import re
 
+from nltk.stem import WordNetLemmatizer
 from hanzipy.decomposer import HanziDecomposer
 from hanzipy.exceptions import NotAHanziCharacter
 
@@ -38,9 +40,6 @@ class PinyinSyllable:
         rhyme = syllable.replace(self.initial(), "")
         return rhyme
 
-
-# TODO
-# IMPLEMENT SORTING BY FREQUENCY
 
 class HanziDictionary:
     def __init__(self, use_cache=True):
@@ -178,14 +177,17 @@ class HanziDictionary:
         logging.debug("Creating English word index...")
         
         self.english_index = {}
+        lemmatizer = WordNetLemmatizer()
         
         def clean_word(word):
-            word = word.lower()
-            return word.strip(string.punctuation)
+            word = word.lower().strip(string.punctuation)
+            if len(word) <= 1 or word.isdigit():
+                return ""
+            return lemmatizer.lemmatize(word)
         
         for hanzi, entries in self.dictionary_simplified.items():
             for entry in entries:
-                words = entry['definition'].lower().replace('/', ' ').replace('\'s', ' ').split()
+                words = re.findall(r'\b\w+(?:[-\']\w+)*\b', entry['definition'].lower())
                 words = [clean_word(word) for word in words if clean_word(word)]
                 for word in words:
                     if word not in self.english_index:
