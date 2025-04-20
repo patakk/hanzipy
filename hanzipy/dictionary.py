@@ -45,7 +45,6 @@ class HanziDictionary:
     def __init__(self, indices_cache=None, use_cache=True):
         self.use_cache = use_cache
         if indices_cache:
-            print("Using custom cache file:", indices_cache)
             self.cache_file = indices_cache
         else:
             self.cache_file = ".indices_cache.json"
