@@ -296,18 +296,21 @@ class HanziDictionary:
             logging.warning(f"Failed to save cache: {e}")
 
     def load_indices_cache(self):
-        """Load all indices from cache file"""
         try:
-            if os.path.exists(self.cache_file):
-                logging.debug("Loading indices from cache...")
+            if isinstance(self.cache_file, dict):
+                cache_data = self.cache_file
+            elif isinstance(self.cache_file, (str, Path)) and os.path.exists(self.cache_file):
                 with open(self.cache_file, 'r', encoding='utf-8') as f:
                     cache_data = json.load(f)
-                    self.english_index = cache_data['english_index']
-                    self.pinyin_index_toned = cache_data['pinyin_index_toned']
-                    self.pinyin_index_toneless = cache_data['pinyin_index_toneless']
-                logging.debug("Cache loaded successfully")
-                return True
-            return False
+            else:
+                return False
+
+            self.english_index = cache_data['english_index']
+            self.pinyin_index_toned = cache_data['pinyin_index_toned']
+            self.pinyin_index_toneless = cache_data['pinyin_index_toneless']
+
+            logging.debug("Cache loaded successfully")
+            return True
         except Exception as e:
             logging.warning(f"Failed to load cache: {e}")
             return False
