@@ -42,9 +42,13 @@ class PinyinSyllable:
 
 
 class HanziDictionary:
-    def __init__(self, use_cache=True):
+    def __init__(self, indices_cache=None, use_cache=True):
         self.use_cache = use_cache
-        self.cache_file = ".indices_cache.json"
+        if indices_cache:
+            print("Using custom cache file:", indices_cache)
+            self.cache_file = indices_cache
+        else:
+            self.cache_file = ".indices_cache.json"
         self.dictionary_simplified = {}
         self.dictionary_traditional = {}
 
