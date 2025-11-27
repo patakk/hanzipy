@@ -52,6 +52,7 @@ class HanziDictionary:
         self.dictionary_traditional = {}
 
         self.english_index = {}
+        self.prefered_english_index = {}
         self.pinyin_index_toned = {}
         self.pinyin_index_toneless = {}
 
@@ -268,16 +269,24 @@ class HanziDictionary:
         Returns list of hanzi characters that contain this English word in their definition
         """
         word = word.lower().replace('\'s', ' ').strip(string.punctuation).strip()
+        if word in self.preferred_english_index:
+            return self.preferred_english_index[word]
+
         if word in self.english_index:
             return self.english_index[word]
+        
         words = word.split(" ")
         if len(words) == 1:
             return []
         results = []
-        for word in words:
-            if word in self.english_index:
-                results += self.english_index[word]
-        return results
+        for w in words:
+            if w in self.preferred_english_index:
+                results += self.preferred_english_index[w]
+        if results:
+            return results
+        for w in words:
+            if w in self.english_index:
+                results += self.english_index[w]
 
     def save_indices_cache(self):
         """Save all indices to cache file"""
@@ -305,6 +314,7 @@ class HanziDictionary:
                 return False
 
             self.english_index = cache_data['english_index']
+            self.preferred_english_index = cache_data.get('preferred_english_index', {})
             self.pinyin_index_toned = cache_data['pinyin_index_toned']
             self.pinyin_index_toneless = cache_data['pinyin_index_toneless']
 
