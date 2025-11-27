@@ -52,7 +52,7 @@ class HanziDictionary:
         self.dictionary_traditional = {}
 
         self.english_index = {}
-        self.prefered_english_index = {}
+        self.preferred_english_index = {}
         self.pinyin_index_toned = {}
         self.pinyin_index_toneless = {}
 
@@ -324,21 +324,28 @@ class HanziDictionary:
             logging.warning(f"Failed to load cache: {e}")
             return False
 
-    def definition_lookup(self, word, script_type=None):
-        # Not Hanzi
+    def definition_lookup(self, word, script_type=None, default_def="---"):
+        tw = ""
+        for c in word:
+            trad = self.dictionary_simplified.get(c, [{}])[0].get("traditional")
+            if trad:
+                tw += trad
+                break
+        if not tw:
+            tw = word
         try:
             if not script_type:
-                if self.determine_if_simplfied_char(word):
-                    return self.dictionary_simplified[word]
+                if self.determine_if_simplified_char(word):
+                    return self.dictionary_simplified.get(word, [{"simplified": word, "traditional": tw, "pinyin": "---", "definition": default_def}])
 
-                if not self.determine_if_simplfied_char(word):
-                    return self.dictionary_traditional[word]
+                if not self.determine_if_simplified_char(word):
+                    return self.dictionary_traditional.get(word, [{"simplified": word, "traditional": tw, "pinyin": "---", "definition": default_def}])
 
             else:
                 if script_type == "simplified":
-                    return self.dictionary_simplified[word]
+                    return self.dictionary_simplified.get(word, [{"simplified": word, "traditional": tw, "pinyin": "---", "definition": default_def}])
                 elif script_type == "traditional":
-                    return self.dictionary_traditional[word]
+                    return self.dictionary_traditional.get(word, [{"simplified": word, "traditional": tw, "pinyin": "---", "definition": default_def}])
         except KeyError:
             raise KeyError(f"{word} not available in {script_type} dictionary.")
 
@@ -479,7 +486,7 @@ class HanziDictionary:
 
         return search_result
 
-    def determine_if_simplfied_char(self, character):
+    def determine_if_simplified_char(self, character):
         if character in self.dictionary_simplified.keys():
             return True
 
