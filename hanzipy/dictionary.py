@@ -52,7 +52,6 @@ class HanziDictionary:
         self.dictionary_traditional = {}
 
         self.english_index = {}
-        self.preferred_english_index = {}
         self.pinyin_index_toned = {}
         self.pinyin_index_toneless = {}
 
@@ -149,7 +148,7 @@ class HanziDictionary:
                         hanzi_dict[0]["traditional"]
                     ] = hanzi_dict
         if not skip_indices:
-            self.create_english_index()
+            #self.create_english_index()
             self.create_pinyin_index()
             self.save_indices_cache()
         self.log_indices_stats()
@@ -269,8 +268,6 @@ class HanziDictionary:
         Returns list of hanzi characters that contain this English word in their definition
         """
         word = word.lower().replace('\'s', ' ').strip(string.punctuation).strip()
-        if word in self.preferred_english_index:
-            return self.preferred_english_index[word]
 
         if word in self.english_index:
             return self.english_index[word]
@@ -280,18 +277,14 @@ class HanziDictionary:
             return []
         results = []
         for w in words:
-            if w in self.preferred_english_index:
-                results += self.preferred_english_index[w]
-        if results:
-            return results
-        for w in words:
             if w in self.english_index:
                 results += self.english_index[w]
+        return results
 
     def save_indices_cache(self):
         """Save all indices to cache file"""
         cache_data = {
-            'english_index': self.english_index,
+            #'english_index': self.english_index,
             'pinyin_index_toned': self.pinyin_index_toned,
             'pinyin_index_toneless': self.pinyin_index_toneless
         }
@@ -314,7 +307,6 @@ class HanziDictionary:
                 return False
 
             self.english_index = cache_data['english_index']
-            self.preferred_english_index = cache_data.get('preferred_english_index', {})
             self.pinyin_index_toned = cache_data['pinyin_index_toned']
             self.pinyin_index_toneless = cache_data['pinyin_index_toneless']
 
