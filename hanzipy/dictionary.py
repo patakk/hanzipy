@@ -424,12 +424,16 @@ class HanziDictionary:
             for freq in all_frequencies:
                 total += int(freq)
 
+            if len(all_frequencies) == 0:
+                return 0
             mean = total / len(all_frequencies)
             return mean
 
         def compute_variance():
             total = 0
 
+            if len(all_frequencies) == 0:
+                return 0
             for freq in all_frequencies:
                 temp = int(freq) - mean
                 total += temp * temp
