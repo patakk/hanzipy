@@ -328,16 +328,16 @@ class HanziDictionary:
         try:
             if not script_type:
                 if self.determine_if_simplified_char(word):
-                    return self.dictionary_simplified.get(word, [{"simplified": word, "traditional": tw, "pinyin": "---", "definition": default_def}])
+                    return self.dictionary_simplified.get(word, [])
 
                 if not self.determine_if_simplified_char(word):
-                    return self.dictionary_traditional.get(word, [{"simplified": word, "traditional": tw, "pinyin": "---", "definition": default_def}])
+                    return self.dictionary_traditional.get(word, [])
 
             else:
                 if script_type == "simplified":
-                    return self.dictionary_simplified.get(word, [{"simplified": word, "traditional": tw, "pinyin": "---", "definition": default_def}])
+                    return self.dictionary_simplified.get(word, [])
                 elif script_type == "traditional":
-                    return self.dictionary_traditional.get(word, [{"simplified": word, "traditional": tw, "pinyin": "---", "definition": default_def}])
+                    return self.dictionary_traditional.get(word, [])
         except KeyError:
             raise KeyError(f"{word} not available in {script_type} dictionary.")
 
